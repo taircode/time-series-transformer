@@ -24,11 +24,16 @@ positionTensor = myPositionalEncoding(pe_features=pe_features, seq_length=seq_le
 #if myEncoderOnlyWithEmbedding then d_model=512, emedding_dim=embedding_dim
 
 train_bert=False
+full_transformer=False
 
 embed_true=True
 peconcat_true=True
 
-model = model.myEncoder(d_model=16, num_ts_in=num_ts_in, num_ts_out=num_ts_out, seq_length=seq_length, pe_features=pe_features, embed_true=embed_true,peconcat_true=peconcat_true)
+if full_transformer:
+    model=model.myTransformer()
+else:
+    model = model.myEncoder(d_model=16, num_ts_in=num_ts_in, num_ts_out=num_ts_out, seq_length=seq_length, pe_features=pe_features, embed_true=embed_true,peconcat_true=peconcat_true)
+
 criterion = torch.nn.MSELoss()
 
 learning_rate = 1e-8
@@ -55,18 +60,75 @@ def create_srctgt_pairs(data, window_size):
     return srctgt_data_pairs
     #note we are returning a list of torch tensors (not one big tensor)
 
+def create_bert_tuples(progression,window_size,mask_percent):
+    data_tuples=[]
+    L=len(progression)
+    for i in range(L-window_size-1):
+        src_seq=progression[i:i+window_size]
+        minimum=min(src_seq)
+        maximum=max(src_seq)
+        src_seq = torch.FloatTensor(src_seq)
+    
+        src_seq, seq_range, seq_mean=mean_normalize(src_seq)   
+        tgt_seq=copy.deepcopy(src_seq)
+        tgt_seq = torch.FloatTensor(tgt_seq) 
+        
+        num_indices=math.floor(window_size*(mask_percent))
+
+        indices=random.sample(range(window_size),num_indices)
+        
+        num_other=math.floor(num_indices*(.20))
+        indices_other=random.sample(indices,num_other)
+        
+        indices_mask=[item for item in indices if item not in indices_other]
+
+        indices_untouch=random.sample(indices_other,math.floor(num_other/2))
+        indices_rand=[item for item in indices_other if item not in indices_untouch]
+
+        for j in indices_rand:
+            src_seq[j]=(random.randint(minimum,maximum)-seq_mean)/seq_range
+
+        data_tuples.append([src_seq,tgt_seq,indices,indices_mask,seq_range,seq_mean])
+    #srctgt_data_pairs=np.array(srctgt_data_pairs)
+    #if you don't do the line directly above, then it's slow to convert a list of np arrays to torch tensors
+    return data_tuples
+
+#This method is if you're using the full transformer model with encoder & decoder
+#create a lits of data triples (src,tgt,out)
+def create_data_triples(progression, window_size, prediction_size):
+    data_triples=[]#src, tgt, out
+    L=len(progression)
+    for i in range(L-window_size-1):
+        src_seq=progression[i:i+window_size]
+        tgt_seq=progression[i+window_size:i+window_size+prediction_size]
+        out_seq=progression[i+window_size+1:i+window_size+prediction_size+1]
+        data_triples.append([src_seq,tgt_seq,out_seq])
+    #data_triples=np.array(data_triples)
+    #if you don't do the line directly above, then it's slow to convert a list of np arrays to torch tensors
+    return data_triples
+    #return torch.FloatTensor(data_triples)
+
 def get_data(data):
     L=len(data)
     ratio=math.floor(3/4*L)
     train_data=data
     val_data=data[ratio:,]
 
-    train_data_pairs=create_srctgt_pairs(train_data, seq_length)
-    val_data_pairs=create_srctgt_pairs(val_data, seq_length)
+    if full_transformer:
+        train_data_pairs=create_data_triples(train_data, seq_length)
+        val_data_pairs=create_data_triples(val_data, seq_length)
+    else: #encoder only
+        if train_bert: #BERT-masking
+            #hard-coding 15% masking right now
+            train_data_pairs=create_bert_tuples(train_data, seq_length, .15)
+            val_data_pairs = create_bert_tuples(train_data, seq_length, .15)
+        else: #generative, so not BERT-masking
+            train_data_pairs=create_srctgt_pairs(train_data, seq_length)
+            val_data_pairs=create_srctgt_pairs(val_data, seq_length)
     
-    return train_data_pairs, val_data_pairs
+    return train_data_pairs, val_data_pairs    
 
-def train_predictive(train_data):
+def train_generative(train_data):
     model.train()
     print("in train")
     #not doing batching yet but you should
@@ -128,49 +190,6 @@ def val(val_data):
             loss = criterion(prediction, tgt)
             total_loss+=loss
     return total_loss
-
-def create_bert_tuples(progression,window_size,mask_percent):
-    data_tuples=[]
-    L=len(progression)
-    for i in range(L-window_size-1):
-        src_seq=progression[i:i+window_size]
-        minimum=min(src_seq)
-        maximum=max(src_seq)
-        src_seq = torch.FloatTensor(src_seq)
-    
-        src_seq, seq_range, seq_mean=mean_normalize(src_seq)   
-        tgt_seq=copy.deepcopy(src_seq)
-        tgt_seq = torch.FloatTensor(tgt_seq) 
-        
-        num_indices=math.floor(window_size*(mask_percent))
-
-        indices=random.sample(range(window_size),num_indices)
-        
-        num_other=math.floor(num_indices*(.20))
-        indices_other=random.sample(indices,num_other)
-        
-        indices_mask=[item for item in indices if item not in indices_other]
-
-        indices_untouch=random.sample(indices_other,math.floor(num_other/2))
-        indices_rand=[item for item in indices_other if item not in indices_untouch]
-
-        for j in indices_rand:
-            src_seq[j]=(random.randint(minimum,maximum)-seq_mean)/seq_range
-
-        data_tuples.append([src_seq,tgt_seq,indices,indices_mask,seq_range,seq_mean])
-    #srctgt_data_pairs=np.array(srctgt_data_pairs)
-    #if you don't do the line directly above, then it's slow to convert a list of np arrays to torch tensors
-    return data_tuples
-
-def get_bert_data():
-    train_progression=get_arithmetic_prog(0,6000,arithmetic_step)
-    val_progression=get_arithmetic_prog(5000,5600,arithmetic_step)
-
-    #hard coded 15 percent for now
-    train_data=create_bert_tuples(train_progression, seq_length, .15)
-    val_data=create_bert_tuples(val_progression, seq_length, .15)
-    
-    return train_data, val_data
 
 def create_bert_mask(indices):
     mask = torch.zeros(seq_length,seq_length)
@@ -244,16 +263,87 @@ def bert_val(val_data):
             total_loss+=loss
     return total_loss
 
+def mean_normalize_transformer(seq1: Tensor, seq2: Tensor):
+    both=torch.cat((seq1,seq2))
+    mean=torch.mean(both)
+    max=torch.max(both)
+    min=torch.min(both)
+    seq_range=max-min
+    return (seq1-mean)/seq_range, (seq2-mean)/seq_range, seq_range, mean
+
+def train_full_transformer(train_data):
+    model.train()
+    print("in train")
+    #not doing batching yet but you should
+    for i in range(len(train_data)):
+        src = train_data[i][0]
+        tgt=train_data[i][1]
+        out=train_data[i][2]
+
+        src=src.unsqueeze(1)
+        tgt=tgt.unsqueeze(1)
+        out=out.unsqueeze(1)
+
+        src, tgt, seq_range, mean=mean_normalize_transformer(seq1=src,seq2=tgt)
+        prediction = model(src, tgt)
+        prediction=prediction*seq_range+mean
+        prediction=prediction.view(-1,1)
+        #print(f"prediction={prediction}")
+        #print(f"out={out}")
+        #print(prediction.size())
+        #print(out.size())
+        #if i%1000==0:
+        #    print(f"prediction={prediction}")
+
+        #the get data method might produce data triples where the tgt or out falls of the end of the arithmetic sequence making them a smaller length
+        #being lazy here, probably better to make this fix in the get_data method(s)
+        if prediction.size()==out.size():
+            loss = criterion(prediction, out)
+            if i % 100 ==0:
+                #print(j)
+                print(f"loss={loss}")
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            # scheduler.step(loss.detach().item())
+            #train_loss += loss.detach().item()
+            #if loss < .04:
+            #    print(f"finished on loop number {i}")
+            #    break
+
+def transformer_val(val_data):
+    print("in val")
+    total_loss=0
+    with torch.no_grad():
+        for i in range(len(val_data)):
+            src = val_data[i][0]
+            tgt = val_data[i][1]
+            out = val_data[i][2]
+
+            src=src.unsqueeze(1)
+            tgt=tgt.unsqueeze(1)
+            out=out.unsqueeze(1)
+
+            src, tgt, seq_range, mean=mean_normalize(seq1=src,seq2=tgt)
+            prediction = model(src,tgt)
+            prediction=prediction*seq_range+mean
+            prediction=prediction.view(-1,1)
+            
+            #the get data method might produce data triples where the tgt or out falls of the end of the arithmetic sequence making them a smaller length
+            #being lazy here, probably better to make this fix in the get_data method(s)
+            if prediction.size()==out.size():
+                loss = criterion(prediction, out)
+                total_loss+=loss
+    return total_loss
 
 def train(data, model):
 
     data=data
 
     #create train and val data
-    if train_bert:
-        train_data, val_data = get_bert_data()
-    else:
-        train_data, val_data = get_data(data)
+    #get_data handles the cases of full_transformer, encoder bert style, or encoder
+    train_data, val_data = get_data(data)
 
     epochs=50
 
@@ -267,20 +357,26 @@ def train(data, model):
 
         print(f"epoch={epoch}")
         
-        if train_bert:
-            train_bert_style(train_data)
-        else:
-            train_predictive(train_data)
+        if full_transformer:
+            train_full_transformer(train_data)
+        else:    
+            if train_bert:
+                train_bert_style(train_data)
+            else:
+                train_generative(train_data)
         
 
         epoch_end_time=time.time()
 
         if (epoch-1) %1==0:
             model.eval()
-            if train_bert:
-                val_loss=bert_val(val_data)
+            if full_transformer:
+                val_loss=transformer_val(val_data)
             else:
-                val_loss=val(val_data)
+                if train_bert:
+                    val_loss=bert_val(val_data)
+                else:
+                    val_loss=val(val_data)
             
             print('-' * 89)
             print('| end of epoch {:3d} | time: {:5.2f}s | val loss {:5.5f}'.format(epoch, (epoch_end_time - epoch_start_time), val_loss))
