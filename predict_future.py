@@ -15,6 +15,7 @@ def predict_future(eval_model, progression: Tensor, src_length, num_steps, num_t
 
     with torch.no_grad():
         for i in range(num_steps):
+            #print(f"src_seq={src_seq[-src_length:]}")
             input=src_seq[-src_length:]
             #print(input)
             #print(f"input.size()={input.size()}")
@@ -26,8 +27,10 @@ def predict_future(eval_model, progression: Tensor, src_length, num_steps, num_t
             #print(f"output.size()={output.size()}")
             #print(f"output={output}")
             output=output.view(-1,num_ts_out)
+            #print(f"output={output}")
             #print(f"output.size()={output.size()}")
             #print(f"output={output}")
+            #print(f"new output={output[-1:]}")
             src_seq=torch.cat((src_seq, output[-1:]))
     
     return src_seq

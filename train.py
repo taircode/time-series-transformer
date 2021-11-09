@@ -29,15 +29,11 @@ full_transformer=False
 embed_true=True
 peconcat_true=True
 
-if full_transformer:
-    model=model.myTransformer()
-else:
-    model = model.myEncoder(d_model=16, num_ts_in=num_ts_in, num_ts_out=num_ts_out, seq_length=seq_length, pe_features=pe_features, embed_true=embed_true,peconcat_true=peconcat_true)
+#if full_transformer:
+#    model=model.myTransformer()
+#else:
+#    model = model.myEncoder(d_model=16, num_ts_in=num_ts_in, num_ts_out=num_ts_out, seq_length=seq_length, pe_features=pe_features, embed_true=embed_true,peconcat_true=peconcat_true)
 
-criterion = torch.nn.MSELoss()
-
-learning_rate = 1e-8
-optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 
 dtype=torch.float
 
@@ -128,7 +124,7 @@ def get_data(data):
     
     return train_data_pairs, val_data_pairs    
 
-def train_generative(train_data):
+def train_generative(train_data, model):
     model.train()
     print("in train")
     #not doing batching yet but you should
@@ -170,7 +166,7 @@ def train_generative(train_data):
         #    print(f"finished on loop number {i}")
         #    break
 
-def val(val_data):
+def val(val_data, model):
     total_loss=0
     with torch.no_grad():
         for i in range(len(val_data)):
@@ -198,7 +194,7 @@ def create_bert_mask(indices):
     mask = mask.float().masked_fill(mask==1, float('-inf'))
     return mask
 
-def train_bert_style(train_data):
+def train_bert_style(train_data, model):
     model.train()
     print("in bert train")
     #not doing batching yet but you should
@@ -233,7 +229,7 @@ def train_bert_style(train_data):
         loss.backward()
         optimizer.step()
 
-def bert_val(val_data):
+def bert_val(val_data, model):
     total_loss=0
     with torch.no_grad():
         for i in range(len(val_data)):
@@ -271,7 +267,7 @@ def mean_normalize_transformer(seq1: Tensor, seq2: Tensor):
     seq_range=max-min
     return (seq1-mean)/seq_range, (seq2-mean)/seq_range, seq_range, mean
 
-def train_full_transformer(train_data):
+def train_full_transformer(train_data, model):
     model.train()
     print("in train")
     #not doing batching yet but you should
@@ -312,7 +308,7 @@ def train_full_transformer(train_data):
             #    print(f"finished on loop number {i}")
             #    break
 
-def transformer_val(val_data):
+def transformer_val(val_data, model):
     print("in val")
     total_loss=0
     with torch.no_grad():
@@ -349,8 +345,6 @@ def train(data, model):
 
     min_loss=float('inf')
 
-    best_model=copy.deepcopy(model)
-
     for epoch in range(1,epochs+1):
         
         epoch_start_time=time.time()
@@ -358,12 +352,12 @@ def train(data, model):
         print(f"epoch={epoch}")
         
         if full_transformer:
-            train_full_transformer(train_data)
+            train_full_transformer(train_data, model)
         else:    
             if train_bert:
-                train_bert_style(train_data)
+                train_bert_style(train_data, model)
             else:
-                train_generative(train_data)
+                train_generative(train_data, model)
         
 
         epoch_end_time=time.time()
@@ -371,12 +365,12 @@ def train(data, model):
         if (epoch-1) %1==0:
             model.eval()
             if full_transformer:
-                val_loss=transformer_val(val_data)
+                val_loss=transformer_val(val_data, model)
             else:
                 if train_bert:
-                    val_loss=bert_val(val_data)
+                    val_loss=bert_val(val_data, model)
                 else:
-                    val_loss=val(val_data)
+                    val_loss=val(val_data, model)
             
             print('-' * 89)
             print('| end of epoch {:3d} | time: {:5.2f}s | val loss {:5.5f}'.format(epoch, (epoch_end_time - epoch_start_time), val_loss))
@@ -386,8 +380,11 @@ def train(data, model):
                 print('-' * 89+"\n"+"updating best_model"+"\n"+'-' * 89)
                 min_loss=val_loss
                 best_model=copy.deepcopy(model)
-                torch.save(best_model,"best_model.pth")
+                torch.save(best_model,path)
 
+            predictions=predict_future(model, data, seq_length, 10, num_ts_out)
+            new_predictions=predictions[-10:]
+            print(new_predictions)
             #src_sequence=torch.arange(3500,3600,dtype=dtype)
             #src_sequence=src_sequence.unsqueeze(1)
             #src_sequence, seq_range, mean=mean_normalize(seq=src_sequence)
@@ -401,18 +398,32 @@ def train(data, model):
         #    break
 
 
+if full_transformer:
+    path="best_model_transformer.pth"
+else:    
+    if train_bert:
+        path="best_model_bert.pth"
+    else:
+        path="best_model_encoder.pth"
+
 dataLoader=data.myDataLoader()
 data=dataLoader.get_data()
 
-mymodel=torch.load("best_model.pth")
+#make a boolean option here to start over or load from saved
 
-#train(data)
+mymodel=torch.load(path)
+
+criterion = torch.nn.MSELoss()
+learning_rate = 1e-8
+optimizer = torch.optim.SGD(mymodel.parameters(), lr=learning_rate)
+
 train(data, mymodel)
+
+mymodel=torch.load(path)
 
 predictions=predict_future(mymodel, data, seq_length, 10, num_ts_out)
 new_predictions=predictions[-10:]
 print(new_predictions)
-
 
 #progression=torch.arange(start=3500,end=4000,step=arithmetic_step,dtype=dtype)
 #progression=progression.unsqueeze(1)
