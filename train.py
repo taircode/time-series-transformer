@@ -42,8 +42,8 @@ def create_bert_tuples(progression,window_size,mask_percent):
     L=len(progression)
     for i in range(L-window_size-1):
         src_seq=progression[i:i+window_size]
-        minimum=min(src_seq)
-        maximum=max(src_seq)
+        minimum=torch.min(src_seq)
+        maximum=torch.max(src_seq)
         src_seq = torch.FloatTensor(src_seq)
     
         src_seq, seq_range, seq_mean=mean_normalize(src_seq)   
@@ -63,7 +63,7 @@ def create_bert_tuples(progression,window_size,mask_percent):
         indices_rand=[item for item in indices_other if item not in indices_untouch]
 
         for j in indices_rand:
-            src_seq[j]=(random.randint(minimum,maximum)-seq_mean)/seq_range
+            src_seq[j]=(random.uniform(minimum.item(),maximum.item())-seq_mean)/seq_range
 
         data_tuples.append([src_seq,tgt_seq,indices,indices_mask,seq_range,seq_mean])
     #srctgt_data_pairs=np.array(srctgt_data_pairs)
@@ -197,14 +197,13 @@ def train_bert_style(train_data, model):
 
         mask=create_bert_mask(mask_indices)
 
-        src=src.unsqueeze(1)
-        tgt=tgt.unsqueeze(1)
-
         prediction = model(src, mask)
-        prediction=prediction*seq_range+mean
+        #prediction=prediction*seq_range+mean
         prediction=prediction.view(-1,1)
         #if i%1000==0:
         #    print(f"prediction={prediction}")
+
+        tgt=(tgt-mean)/seq_range
 
         prediction=prediction[error_indices,:]
         tgt=tgt[error_indices,:]
@@ -231,14 +230,13 @@ def bert_val(val_data, model):
 
             mask=create_bert_mask(mask_indices)
 
-            src=src.unsqueeze(1)
-            tgt=tgt.unsqueeze(1)
-
             prediction = model(src, mask)
-            prediction=prediction*seq_range+mean
+            #prediction=prediction*seq_range+mean
             prediction=prediction.view(-1,1)
             #if i%1000==0:
             #    print(f"prediction={prediction}")
+
+            tgt=(tgt-mean)/seq_range
 
             prediction=prediction[error_indices,:]
             tgt=tgt[error_indices,:]
@@ -417,8 +415,9 @@ pe_features=10
 
 from_new=True
 
-train_bert=False
-full_transformer=True
+#can't both be true
+train_bert=True
+full_transformer=False
 
 #options for encoder-only
 error_last_only=True
@@ -427,7 +426,7 @@ if error_last_only:
 else:
     triangle_encoder_mask=True
 
-embed_true=False #transformer no_embed doesn't work right now - fix it.
+embed_true=True
 peconcat_true=False
 
 dtype=torch.float
@@ -500,22 +499,3 @@ else:
     predictions=predict_future(mymodel, data, seq_length, 90, num_ts_out)
 new_predictions=predictions[-90:]
 print(new_predictions.view(1,-1))
-
-#progression=torch.arange(start=3500,end=4000,step=arithmetic_step,dtype=dtype)
-#progression=progression.unsqueeze(1)
-
-#predictions=predict_future(best_model, progression, 10)
-
-#print(f"input={progression.view(1,-1)}")
-
-#new_predictions=predictions[-10:]
-
-#actual=torch.arange(start=3500,end=4029,step=arithmetic_step,dtype=dtype)
-#actual=actual.unsqueeze(1)
-#actual=actual[-10:]
-#
-#dif=torch.add(new_predictions,actual,alpha=-1)
-
-#print(f"actual={actual.view(1,-1)}")
-#print(f"predictions={new_predictions.view(1,-1)}")
-#print(f"dif={dif.view(1,-1)}")
