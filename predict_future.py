@@ -63,7 +63,6 @@ def predict_future_transformer(eval_model, progression: Tensor, src_length, num_
             #print(f"output.size()={output.size()}")
             #print(f"output={output}")
             src_seq=torch.cat((src_seq, output[-1:]))
-    
     return src_seq
 
 

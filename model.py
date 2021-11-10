@@ -100,15 +100,20 @@ class myTransformer(nn.Module):
             else:
                 #in this case num_features=num_ts=pe_features
                 self.num_features=num_ts
-                self.pe_features=d_model
 
             #this is the default, not sure why you wouldn't embed. If you don't, then d_model=self.num_features
             if self.input_layer_true:
                 self.src_input_layer=nn.Linear(self.num_features,d_model)
                 self.tgt_input_layer=nn.Linear(self.num_features,d_model)
                 self.d_model=d_model
+                #this is pretty ugly
+                if not self.peconcat_true:
+                    self.pe_features=self.d_model
             else:
                 self.d_model=self.num_features
+                #this is pretty ugly
+                if not self.peconcat_true:
+                    self.pe_features=self.d_model
 
             self.srcPositionTensor=positional.myPositionalEncoding(pe_features=self.pe_features,seq_length=src_seq_length)
             self.tgtPositionTensor=positional.myPositionalEncoding(pe_features=self.pe_features,seq_length=tgt_seq_length)
@@ -151,8 +156,6 @@ class myTransformer(nn.Module):
                 src=self.srcPositionTensor.add(src)
                 tgt=self.tgtPositionTensor.add(tgt)
 
-            #print(f"src.size()={src.size()}")
-            #print(f"len(src)={len(src)}")
             #batch_size=1 for now
             src_with_batch=src.reshape(self.src_seq_length,1,self.d_model)
             tgt_with_batch=tgt.reshape(self.tgt_seq_length,1,self.d_model)
