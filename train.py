@@ -147,8 +147,8 @@ def train_generative(train_data, model):
             mask=_generate_square_subsequent_mask(len(src))
             prediction = model(src,mask)
         else:
-            prediction = model(src)
-            
+            prediction = model(src,mask=None)
+
         #print(f"(before rescale) prediction[-1,]={prediction[-1,]}")
         #print(f"mean={mean}")
         #print(f"seq_range={seq_range}")
@@ -355,7 +355,14 @@ def train(data, model):
 
     epochs=50
 
-    min_loss=float('inf')
+    #min_loss=float('inf')
+    if full_transformer:
+        min_loss=transformer_val(val_data, model)
+    else:
+        if train_bert:
+            min_loss=bert_val(val_data, model)
+        else:
+            min_loss=val(val_data, model)
 
     for epoch in range(1,epochs+1):
         
