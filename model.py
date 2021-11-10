@@ -113,10 +113,10 @@ class myTransformer(nn.Module):
             self.srcPositionTensor=positional.myPositionalEncoding(pe_features=self.pe_features,seq_length=src_seq_length)
             self.tgtPositionTensor=positional.myPositionalEncoding(pe_features=self.pe_features,seq_length=tgt_seq_length)
 
-            self.transformer=nn.Transformer(d_model=d_model,nhead=nhead,num_encoder_layers=num_encoder_layers,num_decoder_layers=num_decoder_layers)
+            self.transformer=nn.Transformer(d_model=self.d_model,nhead=nhead,num_encoder_layers=num_encoder_layers,num_decoder_layers=num_decoder_layers)
             
             #change 1 to num_ts_out later, for now hard-coded
-            self.output_layer=nn.Linear(d_model,1)
+            self.output_layer=nn.Linear(self.d_model,1)
 
             self.init_weights()
 

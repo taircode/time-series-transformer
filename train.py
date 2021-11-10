@@ -336,7 +336,7 @@ def train(data, model):
     #get_data handles the cases of full_transformer, encoder bert style, or encoder
     train_data, val_data = get_data(data)
 
-    epochs=100
+    epochs=1000
 
     #min_loss=float('inf')
     if full_transformer:
@@ -418,7 +418,7 @@ pe_features=10
 from_new=True
 
 train_bert=False
-full_transformer=False
+full_transformer=True
 
 #options for encoder-only
 error_last_only=True
@@ -427,8 +427,8 @@ if error_last_only:
 else:
     triangle_encoder_mask=True
 
-embed_true=True
-peconcat_true=True
+embed_true=False #transformer no_embed doesn't work right now - fix it.
+peconcat_true=False
 
 dtype=torch.float
 
@@ -487,6 +487,9 @@ criterion = torch.nn.MSELoss()
 learning_rate = 1e-8
 optimizer = torch.optim.SGD(mymodel.parameters(), lr=learning_rate)
 
+print(f"full_transformer={full_transformer}")
+print(f"embed_true={embed_true}")
+print(f"peconcat_true={peconcat_true}")
 train(data, mymodel)
 
 mymodel=torch.load(path)
