@@ -35,6 +35,36 @@ def predict_future(eval_model, progression: Tensor, src_length, num_steps, num_t
     
     return src_seq
 
+def mean_normalize_transformer(seq1: Tensor, seq2: Tensor):
+    both=torch.cat((seq1,seq2))
+    mean=torch.mean(both)
+    max=torch.max(both)
+    min=torch.min(both)
+    seq_range=max-min
+    return (seq1-mean)/seq_range, (seq2-mean)/seq_range, seq_range, mean
+
+def predict_future_transformer(eval_model, progression: Tensor, src_length, num_steps, tgt_length):
+    eval_model.eval()
+
+    src_seq=progression
+
+    with torch.no_grad():
+        for i in range(num_steps):
+            input=src_seq[-src_length-(tgt_length-1):-(tgt_length-1)]
+            tgt=src_seq[-tgt_length:]
+            #print(f"input.size()={input.size()}")
+            #print(f"input={input}")
+            input, tgt, seq_range, mean=mean_normalize_transformer(seq1=input,seq2=tgt)
+            output=eval_model(input,tgt)
+            output=output*seq_range+mean
+            #print(f"output.size()={output.size()}")
+            #print(f"output={output}")
+            output=output.view(-1,1)
+            #print(f"output.size()={output.size()}")
+            #print(f"output={output}")
+            src_seq=torch.cat((src_seq, output[-1:]))
+    
+    return src_seq
 
 
 #seq_length=100

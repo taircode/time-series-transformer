@@ -8,35 +8,10 @@ import time
 import math
 import copy
 from predict_future import predict_future
+from predict_future import predict_future_transformer
 import random
 
 import data
-
-#add num_ts_in, right now it's hardcoded to 1
-seq_length=90
-#maybe have it figure out num_ts from dataLoader
-num_ts_in=1
-num_ts_out=1
-pe_features=10
-positionTensor = myPositionalEncoding(pe_features=pe_features, seq_length=seq_length)
-
-#if myEncoderOnly then d_model=embedding_dim
-#if myEncoderOnlyWithEmbedding then d_model=512, emedding_dim=embedding_dim
-
-train_bert=False
-full_transformer=False
-traingle_encoder_mask=False
-
-embed_true=True
-peconcat_true=True
-
-#if full_transformer:
-#    model=model.myTransformer()
-#else:
-#    model = model.myEncoder(d_model=16, num_ts_in=num_ts_in, num_ts_out=num_ts_out, seq_length=seq_length, pe_features=pe_features, embed_true=embed_true,peconcat_true=peconcat_true)
-
-
-dtype=torch.float
 
 def _generate_square_subsequent_mask(self, sz):
     mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
@@ -117,8 +92,8 @@ def get_data(data):
     val_data=data[ratio:,]
 
     if full_transformer:
-        train_data_pairs=create_data_triples(train_data, seq_length)
-        val_data_pairs=create_data_triples(val_data, seq_length)
+        train_data_pairs=create_data_triples(train_data, seq_length, prediction_size)
+        val_data_pairs=create_data_triples(val_data, seq_length, prediction_size)
     else: #encoder only
         if train_bert: #BERT-masking
             #hard-coding 15% masking right now
@@ -143,7 +118,7 @@ def train_generative(train_data, model):
 
         src, seq_range, mean=mean_normalize(seq=src)
 
-        if traingle_encoder_mask:
+        if triangle_encoder_mask:
             mask=_generate_square_subsequent_mask(len(src))
             prediction = model(src,mask)
         else:
@@ -161,9 +136,11 @@ def train_generative(train_data, model):
 
         tgt=(tgt-mean)/seq_range
 
-        loss = criterion(prediction, tgt)
-        if i % 100 ==0:
-            #print(j)
+        if error_last_only:
+            loss=criterion(prediction[-1,],tgt[-1,])
+        else:
+            loss = criterion(prediction, tgt)
+        if i % 200 ==0:
             print(f"loss={loss}")
 
         #unscaled_prediction=prediction*seq_range+mean
@@ -195,7 +172,7 @@ def val(val_data, model):
 
             tgt=(tgt-mean)/seq_range
 
-            loss = criterion(prediction, tgt)
+            loss = criterion(prediction[-1,], tgt[-1,])
             total_loss+=loss
     return total_loss
 
@@ -288,13 +265,13 @@ def train_full_transformer(train_data, model):
         tgt=train_data[i][1]
         out=train_data[i][2]
 
-        src=src.unsqueeze(1)
-        tgt=tgt.unsqueeze(1)
-        out=out.unsqueeze(1)
+        #src=src.unsqueeze(1)
+        #tgt=tgt.unsqueeze(1)
+        #out=out.unsqueeze(1)
 
         src, tgt, seq_range, mean=mean_normalize_transformer(seq1=src,seq2=tgt)
         prediction = model(src, tgt)
-        prediction=prediction*seq_range+mean
+        #prediction=prediction*seq_range+mean
         prediction=prediction.view(-1,1)
         #print(f"prediction={prediction}")
         #print(f"out={out}")
@@ -302,6 +279,8 @@ def train_full_transformer(train_data, model):
         #print(out.size())
         #if i%1000==0:
         #    print(f"prediction={prediction}")
+
+        out=(out-mean)/seq_range
 
         #the get data method might produce data triples where the tgt or out falls of the end of the arithmetic sequence making them a smaller length
         #being lazy here, probably better to make this fix in the get_data method(s)
@@ -329,14 +308,18 @@ def transformer_val(val_data, model):
             tgt = val_data[i][1]
             out = val_data[i][2]
 
-            src=src.unsqueeze(1)
-            tgt=tgt.unsqueeze(1)
-            out=out.unsqueeze(1)
+            #print(f"src.size()={src.size()}")
+            #src=src.unsqueeze(1)
+            #print(f"src.size()={src.size()}")
+            #tgt=tgt.unsqueeze(1)
+            #out=out.unsqueeze(1)
 
             src, tgt, seq_range, mean=mean_normalize_transformer(seq1=src,seq2=tgt)
             prediction = model(src,tgt)
-            prediction=prediction*seq_range+mean
+            #prediction=prediction*seq_range+mean
             prediction=prediction.view(-1,1)
+
+            out=(out-mean)/seq_range
             
             #the get data method might produce data triples where the tgt or out falls of the end of the arithmetic sequence making them a smaller length
             #being lazy here, probably better to make this fix in the get_data method(s)
@@ -353,7 +336,7 @@ def train(data, model):
     #get_data handles the cases of full_transformer, encoder bert style, or encoder
     train_data, val_data = get_data(data)
 
-    epochs=50
+    epochs=100
 
     #min_loss=float('inf')
     if full_transformer:
@@ -363,6 +346,8 @@ def train(data, model):
             min_loss=bert_val(val_data, model)
         else:
             min_loss=val(val_data, model)
+
+    print(f"initial model has loss={min_loss}")
 
     for epoch in range(1,epochs+1):
         
@@ -401,9 +386,12 @@ def train(data, model):
                 best_model=copy.deepcopy(model)
                 torch.save(best_model,path)
 
-            predictions=predict_future(model, data, seq_length, 10, num_ts_out)
-            new_predictions=predictions[-10:]
-            print(new_predictions)
+            if full_transformer:
+                predictions=predict_future_transformer(model,data,seq_length,30,tgt_seq_length)
+            else:
+                predictions=predict_future(model, data, seq_length, 30, num_ts_out)
+            new_predictions=predictions[-30:]
+            print(new_predictions.view(1,-1))
             #src_sequence=torch.arange(3500,3600,dtype=dtype)
             #src_sequence=src_sequence.unsqueeze(1)
             #src_sequence, seq_range, mean=mean_normalize(seq=src_sequence)
@@ -416,25 +404,84 @@ def train(data, model):
         #if train_loss<100:
         #    break
 
+#add num_ts_in, right now it's hardcoded to 1
+seq_length=90
+#maybe have it figure out num_ts from dataLoader
+num_ts_in=1
+num_ts_out=1
+pe_features=10
+#positionTensor = myPositionalEncoding(pe_features=pe_features, seq_length=seq_length)
+
+#if myEncoderOnly then d_model=embedding_dim
+#if myEncoderOnlyWithEmbedding then d_model=512, emedding_dim=embedding_dim
+
+from_new=True
+
+train_bert=False
+full_transformer=False
+
+#options for encoder-only
+error_last_only=True
+if error_last_only:
+    triangle_encoder_mask=False
+else:
+    triangle_encoder_mask=True
+
+embed_true=True
+peconcat_true=True
+
+dtype=torch.float
 
 if full_transformer:
-    path="best_model_transformer.pth"
-else:    
-    if train_bert:
-        path="best_model_bert.pth"
+    type="transformer"
+elif train_bert:
+    type="bert"
+else:
+    if error_last_only:
+        type="encoder_error_last"
     else:
-        path="best_model_encoder.pth"
+        type="encoder_error_all"
+
+if embed_true:
+    firstlayer="embed"
+else:
+    firstlayer="noembed"
+if peconcat_true:
+    positional="concat"
+else:
+    positional="add"
+
+path=type+"/"+firstlayer+"/"+positional+"/model.pth"
+
+tgt_seq_length=2
+prediction_size=tgt_seq_length
+
+if from_new:
+    if full_transformer:
+        mymodel = model.myTransformer(d_model=8, 
+        nhead=1, 
+        input_layer_true=embed_true, 
+        peconcat_true=peconcat_true, 
+        num_ts=1, 
+        src_seq_length=seq_length, 
+        tgt_seq_length=tgt_seq_length,
+        num_encoder_layers=4,
+        num_decoder_layers=4,
+        pe_features=10) #pe_features only matters if peconcat_true=True
+    else:
+        mymodel = model.myEncoder(d_model=16, num_ts_in=num_ts_in, num_ts_out=num_ts_out, seq_length=seq_length, pe_features=pe_features, embed_true=embed_true,peconcat_true=peconcat_true)
+else:
+    mymodel=torch.load(path)
 
 dataLoader=data.myDataLoader()
 data=dataLoader.get_data()
 
-#make a boolean option here to start over or load from saved
-
-mymodel=torch.load(path)
-
-predictions=predict_future(mymodel, data, seq_length, 10, num_ts_out)
-new_predictions=predictions[-10:]
-print(new_predictions)
+if full_transformer:
+    predictions=predict_future_transformer(mymodel, data, seq_length, 90, tgt_seq_length)
+else:
+    predictions=predict_future(mymodel, data, seq_length, 90, num_ts_out)
+new_predictions=predictions[-90:]
+print(new_predictions.view(1,-1))
 
 criterion = torch.nn.MSELoss()
 learning_rate = 1e-8
@@ -444,9 +491,12 @@ train(data, mymodel)
 
 mymodel=torch.load(path)
 
-predictions=predict_future(mymodel, data, seq_length, 10, num_ts_out)
-new_predictions=predictions[-10:]
-print(new_predictions)
+if full_transformer:
+    predictions=predict_future_transformer(mymodel, data, seq_length, 90, tgt_seq_length)
+else:
+    predictions=predict_future(mymodel, data, seq_length, 90, num_ts_out)
+new_predictions=predictions[-90:]
+print(new_predictions.view(1,-1))
 
 #progression=torch.arange(start=3500,end=4000,step=arithmetic_step,dtype=dtype)
 #progression=progression.unsqueeze(1)
