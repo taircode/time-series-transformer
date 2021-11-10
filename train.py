@@ -25,6 +25,7 @@ positionTensor = myPositionalEncoding(pe_features=pe_features, seq_length=seq_le
 
 train_bert=False
 full_transformer=False
+traingle_encoder_mask=False
 
 embed_true=True
 peconcat_true=True
@@ -36,6 +37,11 @@ peconcat_true=True
 
 
 dtype=torch.float
+
+def _generate_square_subsequent_mask(self, sz):
+    mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
+    mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+    return mask
 
 def mean_normalize(seq: Tensor):
     mean=torch.mean(seq)
@@ -136,7 +142,13 @@ def train_generative(train_data, model):
         #tgt=tgt.unsqueeze(1)
 
         src, seq_range, mean=mean_normalize(seq=src)
-        prediction = model(src,mask=None)
+
+        if traingle_encoder_mask:
+            mask=_generate_square_subsequent_mask(len(src))
+            prediction = model(src,mask)
+        else:
+            prediction = model(src)
+            
         #print(f"(before rescale) prediction[-1,]={prediction[-1,]}")
         #print(f"mean={mean}")
         #print(f"seq_range={seq_range}")
@@ -321,7 +333,7 @@ def transformer_val(val_data, model):
             tgt=tgt.unsqueeze(1)
             out=out.unsqueeze(1)
 
-            src, tgt, seq_range, mean=mean_normalize(seq1=src,seq2=tgt)
+            src, tgt, seq_range, mean=mean_normalize_transformer(seq1=src,seq2=tgt)
             prediction = model(src,tgt)
             prediction=prediction*seq_range+mean
             prediction=prediction.view(-1,1)
@@ -412,6 +424,10 @@ data=dataLoader.get_data()
 #make a boolean option here to start over or load from saved
 
 mymodel=torch.load(path)
+
+predictions=predict_future(mymodel, data, seq_length, 10, num_ts_out)
+new_predictions=predictions[-10:]
+print(new_predictions)
 
 criterion = torch.nn.MSELoss()
 learning_rate = 1e-8

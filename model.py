@@ -44,10 +44,10 @@ class myEncoder(nn.Module):
         self.finalLayer.bias.data.zero_()
         self.finalLayer.weight.data.uniform_(-initrange, initrange)
 
-    def _generate_square_subsequent_mask(self, sz):
-        mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
-        mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
-        return mask
+    #def _generate_square_subsequent_mask(self, sz):
+    #    mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
+    #    mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+    #    return mask
 
     #src input should be seq_length by num_ts
     def forward(self, src, mask: None):
@@ -66,8 +66,9 @@ class myEncoder(nn.Module):
         src_with_batch=src.reshape(self.seq_length,1,self.d_model)
 
         if mask==None:
-            mask = self._generate_square_subsequent_mask(len(src))
-        output = self.encoder(src=src_with_batch)
+            output = self.encoder(src=src_with_batch)
+        else:
+            output = self.encoder(src=src_with_batch,mask=mask)
         output = self.finalLayer(output)
         return output
 
