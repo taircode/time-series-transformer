@@ -10,6 +10,7 @@ import copy
 from predict_future import predict_future
 from predict_future import predict_future_transformer
 import random
+from torch.autograd import Variable
 
 import data
 
@@ -347,40 +348,42 @@ def train_electra(train_data, generator, discriminator):
 
         mask=create_bert_mask(mask_indices)
 
-        prediction = model(src, mask)
+        prediction = generator(src, mask)
         #prediction=prediction*seq_range+mean
         prediction=prediction.view(-1,1)
         #if i%1000==0:
         #    print(f"prediction={prediction}")
 
-        dis_src=tgt
+        gen_loss = gen_criterion(prediction[error_indices,:], tgt[error_indices,:])
+
+        gen_optimizer.zero_grad()
+        gen_loss.backward()
+        gen_optimizer.step()
+
+        #finished with generator
+
+        #do I need requires grad here?
+        prediction_copy=prediction.clone().detach().requires_grad_(True)
+
+        dis_src=copy.deepcopy(tgt)
         dis_tgt=[0]*len(tgt)
         for index in mask_indices:
-            dis_src[index]=prediction[index]
+            dis_src[index]=prediction_copy[index]
             dis_tgt[index]=1
 
         dis_tgt=torch.LongTensor(dis_tgt)
 
         dis_out=discriminator(dis_src)
+        dis_out=dis_out.view(-1,2)
+
         dis_loss=dis_criterion(dis_out,dis_tgt)
+    
+        if i % 100 ==0:
+            print(f"gen_loss={gen_loss}, dis_loss={dis_loss}")
 
         dis_optimizer.zero_grad()
         dis_loss.backward()
-        dis_optimizer.step()   
-
-        #implement here tgt vs prediction - if big difference   
-
-        prediction=prediction[error_indices,:]
-        tgt=tgt[error_indices,:]
-
-        gen_loss = gen_criterion(prediction, tgt)
-        if i % 100 ==0:
-            print(f"gen_loss={gen_loss}")
-            print(f"dis_loss={dis_loss}")
-
-        gen_optimizer.zero_grad()
-        gen_loss.backward()
-        gen_optimizer.step()
+        dis_optimizer.step()
 
 def electra_val(val_data, generator, discriminator):
     print("in electra val")
@@ -400,6 +403,7 @@ def electra_val(val_data, generator, discriminator):
             prediction = generator(src, mask)
             #prediction=prediction*seq_range+mean
             prediction=prediction.view(-1,1)
+            
             #if i%1000==0:
             #    print(f"prediction={prediction}")
 
@@ -412,10 +416,17 @@ def electra_val(val_data, generator, discriminator):
                 dis_tgt[index]=1
 
             dis_tgt=torch.LongTensor(dis_tgt)
+            #print(f"dis_src.size()={dis_src.size()}")
 
             dis_out=discriminator(dis_src)
 
-            dis_loss=dis_criterion(dis_tgt,dis_out)
+            dis_out=dis_out.view(-1,2)
+
+            #print(f"dis_out={dis_out}")
+            #print(f"dis_tgt={dis_tgt}")
+            #print(f"dis_out.size()={dis_out.size()}")
+            #print(f"dis_tgt.size()={dis_tgt.size()}")
+            dis_loss=dis_criterion(dis_out,dis_tgt)
             dis_total_loss+=dis_loss
 
             prediction=prediction[error_indices,:]
@@ -427,6 +438,8 @@ def electra_val(val_data, generator, discriminator):
     return gen_total_loss, dis_total_loss
 
 def train(data, model, discriminator=None):
+
+    print("in train")
 
     data=data
 
@@ -525,7 +538,7 @@ pe_features=10
 #if myEncoderOnly then d_model=embedding_dim
 #if myEncoderOnlyWithEmbedding then d_model=512, emedding_dim=embedding_dim
 
-from_new=True
+from_new=False
 
 electra=True
 
@@ -628,7 +641,10 @@ print(f"full_transformer={full_transformer}")
 print(f"Bert={train_bert}")
 print(f"embed_true={embed_true}")
 print(f"peconcat_true={peconcat_true}")
-train(data, mymodel)
+if electra:
+    train(data,generator,discriminator)
+else:
+    train(data, mymodel)
 
 #PUT IN ELECTRA CASES DOWN HERE
 if electra:

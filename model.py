@@ -5,8 +5,9 @@ import positional
 
 class myDiscriminator(nn.Module):
     def __init__(self,d_model, num_layers, seq_length, num_ts_in):
-        super.__init__()
+        super().__init__()
 
+        self.seq_length=seq_length
         self.d_model=d_model
 
         #for now, let's always use an embedding
@@ -35,8 +36,12 @@ class myDiscriminator(nn.Module):
     def forward(self, src):
         src=self.embedding(src)
         src=self.positionTensor.add(src)
-        src=self.encoder_layer(src)
-        out=self.out_layer=self.out_layer(src)
+        
+        #batch is hard coded to 1 for now
+        src_with_batch=src.reshape(self.seq_length,1,self.d_model)
+
+        encoded=self.discriminator(src_with_batch)
+        out=self.out_layer(encoded)
         #out=self.softMax(out) #don't need this if you use cross-entropy loss function
         return out
 
