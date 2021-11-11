@@ -413,10 +413,10 @@ pe_features=10
 #if myEncoderOnly then d_model=embedding_dim
 #if myEncoderOnlyWithEmbedding then d_model=512, emedding_dim=embedding_dim
 
-from_new=True
+from_new=False
 
 #can't both be true
-train_bert=True
+train_bert=False
 full_transformer=False
 
 #options for encoder-only
@@ -487,6 +487,7 @@ learning_rate = 1e-8
 optimizer = torch.optim.SGD(mymodel.parameters(), lr=learning_rate)
 
 print(f"full_transformer={full_transformer}")
+print(f"Bert={train_bert}")
 print(f"embed_true={embed_true}")
 print(f"peconcat_true={peconcat_true}")
 train(data, mymodel)
