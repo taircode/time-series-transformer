@@ -2,6 +2,44 @@ import torch
 import torch.nn as nn
 import positional
 
+
+class myDiscriminator(nn.Module):
+    def __init__(self,d_model, num_layers, seq_length, num_ts_in):
+        super.__init__()
+
+        self.d_model=d_model
+
+        #for now, let's always use an embedding
+        self.embedding=nn.Linear(num_ts_in,self.d_model)
+
+        #currently just have add feature, not concat
+        self.positionTensor=positional.myPositionalEncoding(pe_features=self.d_model,seq_length=seq_length)
+
+        self.encoder_layer=nn.TransformerEncoderLayer(d_model=self.d_model,nhead=1,dropout=0)
+        self.discriminator = nn.TransformerEncoder(self.encoder_layer, num_layers=num_layers)
+    
+        #one-hot encoding of classifier - original data or not
+        self.out_layer= nn.Linear(self.d_model,2)
+
+        #doesn't work with NLLLoss - use LogSoftMax instead
+        self.softMax=nn.softMax(2)
+
+
+    def init_weights(self):
+        initrange = 0.5
+        self.embedding.bias.data.zero_()
+        self.embedding.weight.data.uniform_(-initrange, initrange)
+        self.out_layer.bias.data.zero_()
+        self.out_layer.weight.data.uniform_(-initrange, initrange)
+    
+    def forward(self, src):
+        src=self.embedding(src)
+        src=self.positionTensor.add(src)
+        src=self.encoder_layer(src)
+        out=self.out_layer=self.out_layer(src)
+        return out
+
+
 #A model with only an encoder
 class myEncoder(nn.Module):
     def __init__(self, d_model: int=512, num_layers: int=4, nhead: int=1, embed_true: bool=True, peconcat_true: bool=True, num_ts_in: int=1, num_ts_out: int=1, pe_features: int=10, seq_length: int=100):
