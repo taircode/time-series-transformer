@@ -22,7 +22,7 @@ class myDiscriminator(nn.Module):
         self.out_layer= nn.Linear(self.d_model,2)
 
         #doesn't work with NLLLoss - use LogSoftMax instead
-        self.softMax=nn.softMax(2)
+        self.softMax=nn.softMax(dim=2)
 
 
     def init_weights(self):
@@ -37,6 +37,7 @@ class myDiscriminator(nn.Module):
         src=self.positionTensor.add(src)
         src=self.encoder_layer(src)
         out=self.out_layer=self.out_layer(src)
+        out=self.softMax(out)
         return out
 
 
