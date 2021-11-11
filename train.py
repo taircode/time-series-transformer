@@ -208,7 +208,7 @@ def train_bert_style(train_data, model):
         #if i%1000==0:
         #    print(f"prediction={prediction}")
 
-        tgt=(tgt-mean)/seq_range            
+        #tgt=(tgt-mean)/seq_range #tgt is already normalized       
 
         prediction=prediction[error_indices,:]
         tgt=tgt[error_indices,:]
@@ -242,7 +242,7 @@ def bert_val(val_data, model):
             #if i%1000==0:
             #    print(f"prediction={prediction}")
 
-            tgt=(tgt-mean)/seq_range
+            #tgt=(tgt-mean)/seq_range
 
             prediction=prediction[error_indices,:]
             tgt=tgt[error_indices,:]
@@ -354,16 +354,10 @@ def train_electra(train_data, generator, discriminator):
         #    print(f"prediction={prediction}")
 
         dis_src=tgt
-        for index in mask_indices:
-            dis_src[index]=prediction[index]
-
-        std=torch.std(tgt)
-        differences=torch.subtract(tgt,prediction)
-        absolute=torch.abs(differences)
-
         dis_tgt=[0]*len(tgt)
         for index in mask_indices:
-            dis_tgt[index]=1 if absolute[index]>std else 0
+            dis_src[index]=prediction[index]
+            dis_tgt[index]=1
 
         dis_tgt=torch.LongTensor(dis_tgt)
 
@@ -374,8 +368,6 @@ def train_electra(train_data, generator, discriminator):
         dis_loss.backward()
         dis_optimizer.step()   
 
-        tgt=(tgt-mean)/seq_range     
-
         #implement here tgt vs prediction - if big difference   
 
         prediction=prediction[error_indices,:]
@@ -383,12 +375,55 @@ def train_electra(train_data, generator, discriminator):
 
         gen_loss = gen_criterion(prediction, tgt)
         if i % 100 ==0:
-            #print(j)
-            print(f"loss={loss}")
+            print(f"gen_loss={gen_loss}")
+            print(f"dis_loss={dis_loss}")
 
         gen_optimizer.zero_grad()
         gen_loss.backward()
         gen_optimizer.step()
+
+def electra_val(val_data, generator, discriminator):
+    gen_total_loss=0
+    dis_total_loss=0
+    with torch.no_grad():
+        for i in range(len(val_data)):
+            src = val_data[i][0]
+            tgt = val_data[i][1]
+            error_indices=val_data[i][2]
+            mask_indices=val_data[i][3]
+            seq_range=val_data[i][4]
+            mean=val_data[i][5]
+
+            mask=create_bert_mask(mask_indices)
+
+            prediction = generator(src, mask)
+            #prediction=prediction*seq_range+mean
+            prediction=prediction.view(-1,1)
+            #if i%1000==0:
+            #    print(f"prediction={prediction}")
+
+            #tgt=(tgt-mean)/seq_range
+
+            dis_src=tgt
+            dis_tgt=[0]*len(tgt)
+            for index in mask_indices:
+                dis_src[index]=prediction[index]
+                dis_tgt[index]=1
+
+            dis_tgt=torch.LongTensor(dis_tgt)
+
+            dis_out=discriminator(dis_src)
+
+            dis_loss=dis_criterion(dis_tgt,dis_out)
+            dis_total_loss+=dis_loss
+
+            prediction=prediction[error_indices,:]
+            tgt=tgt[error_indices,:]
+
+            gen_loss = gen_criterion(prediction, tgt)
+            #print(f"val_loss={loss}")
+            gen_total_loss+=gen_loss
+    return gen_total_loss, dis_total_loss
 
 def train(data, model, discriminator=None):
 
@@ -486,12 +521,12 @@ pe_features=10
 #if myEncoderOnly then d_model=embedding_dim
 #if myEncoderOnlyWithEmbedding then d_model=512, emedding_dim=embedding_dim
 
-from_new=False
+from_new=True
 
 electra=False
 
 #can't both be true
-train_bert=False
+train_bert=True
 full_transformer=False
 
 #options for encoder-only
