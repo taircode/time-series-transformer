@@ -335,7 +335,7 @@ def transformer_val(val_data, model):
 def train_electra(train_data, generator, discriminator):
     generator.train()
     discriminator.train()
-    print("in bert train")
+    print("in electra train")
     #not doing batching yet but you should
     for i in range(len(train_data)):
         src = train_data[i][0]
@@ -383,6 +383,7 @@ def train_electra(train_data, generator, discriminator):
         gen_optimizer.step()
 
 def electra_val(val_data, generator, discriminator):
+    print("in electra val")
     gen_total_loss=0
     dis_total_loss=0
     with torch.no_grad():
@@ -437,8 +438,11 @@ def train(data, model, discriminator=None):
 
     #min_loss=float('inf')
     if electra:
-        min_loss=1000000
-        #implement min_loss=electra_val(val_data,generator,discriminator)
+        generator=model
+        gen_loss, dis_loss=electra_val(val_data,generator,discriminator)
+        min_loss=dis_loss
+        print(f"gen_loss={gen_loss}")
+        print(f"dis_loss={min_loss}")
     elif full_transformer:
         min_loss=transformer_val(val_data, model)
     else:
@@ -456,7 +460,7 @@ def train(data, model, discriminator=None):
         print(f"epoch={epoch}")
         
         if electra:
-            train_electra(train_data,model,discriminator)
+            train_electra(train_data,generator,discriminator)
         elif full_transformer:
             train_full_transformer(train_data, model)
         else:    
@@ -471,9 +475,12 @@ def train(data, model, discriminator=None):
         if (epoch-1) %1==0:
             model.eval()
             if electra:
+                generator.eval()
                 discriminator.eval()
-                print("IMPLEMENT")
-                val_loss=0
+                gen_loss, dis_loss = electra_val(val_data,generator, discriminator)
+                print(f"gen_loss={gen_loss}")
+                print(f"min_loss={dis_loss}")
+                val_loss=dis_loss
             elif full_transformer:
                 val_loss=transformer_val(val_data, model)
             else:
@@ -482,33 +489,30 @@ def train(data, model, discriminator=None):
                 else:
                     val_loss=val(val_data, model)
             
-            print('-' * 89)
+            print('-' * 90)
             print('| end of epoch {:3d} | time: {:5.2f}s | val loss {:5.5f}'.format(epoch, (epoch_end_time - epoch_start_time), val_loss))
-            print('-' * 89)
-
-            if val_loss < min_loss:
-                print('-' * 89+"\n"+"updating best_model"+"\n"+'-' * 89)
-                min_loss=val_loss
-                best_model=copy.deepcopy(model)
-                torch.save(best_model,path)
-
-            if full_transformer:
-                predictions=predict_future_transformer(model,data,seq_length,30,tgt_seq_length)
+            print('-' * 90)
+            if electra:
+                if dis_loss<min_loss:
+                    print('-' * 89+"\n"+"updating best_model"+"\n"+'-' * 89)
+                    min_loss=val_loss
+                    best_discriminator=copy.deepcopy(discriminator)
+                    best_generator=copy.deepcopy(generator)
+                    torch.save(best_discriminator,discriminator_path)
+                    torch.save(best_generator,generator_path)
             else:
-                predictions=predict_future(model, data, seq_length, 30, num_ts_out)
-            new_predictions=predictions[-30:]
-            print(new_predictions.view(1,-1))
-            #src_sequence=torch.arange(3500,3600,dtype=dtype)
-            #src_sequence=src_sequence.unsqueeze(1)
-            #src_sequence, seq_range, mean=mean_normalize(seq=src_sequence)
-            #out=model(src_sequence)
-            #out=out*seq_range+mean
-            #out=out.unsqueeze(1)
-            #print(out)
-
-        #print(f"train_loss={train_loss}")
-        #if train_loss<100:
-        #    break
+                if val_loss < min_loss:
+                    print('-' * 89+"\n"+"updating best_model"+"\n"+'-' * 89)
+                    min_loss=val_loss
+                    best_model=copy.deepcopy(model)
+                    torch.save(best_model,path)
+                else:
+                    if full_transformer:
+                        predictions=predict_future_transformer(model,data,seq_length,30,tgt_seq_length)
+                    else:
+                        predictions=predict_future(model, data, seq_length, 30, num_ts_out)
+                    new_predictions=predictions[-30:]
+                    print(new_predictions.view(1,-1))
 
 #add num_ts_in, right now it's hardcoded to 1
 seq_length=90
@@ -523,7 +527,7 @@ pe_features=10
 
 from_new=True
 
-electra=False
+electra=True
 
 #can't both be true
 train_bert=True
@@ -627,7 +631,11 @@ print(f"peconcat_true={peconcat_true}")
 train(data, mymodel)
 
 #PUT IN ELECTRA CASES DOWN HERE
-mymodel=torch.load(path)
+if electra:
+    generator=torch.load(generator_path)
+    discriminator=torch.load(discriminator_path)
+else:
+    mymodel=torch.load(path)
 
 if electra:
     print("implement electra prediction")
