@@ -37,6 +37,7 @@ def create_srctgt_pairs(data, window_size):
     return srctgt_data_pairs
     #note we are returning a list of torch tensors (not one big tensor)
 
+#of the mask_percent indices, 80% are masked, 10% are random, 10% are left alone
 def create_bert_tuples(progression,window_size,mask_percent):
     data_tuples=[]
     L=len(progression)
@@ -47,17 +48,17 @@ def create_bert_tuples(progression,window_size,mask_percent):
         src_seq = torch.FloatTensor(src_seq)
     
         src_seq, seq_range, seq_mean=mean_normalize(src_seq)   
-        tgt_seq=copy.deepcopy(src_seq)
+        tgt_seq = copy.deepcopy(src_seq)
         tgt_seq = torch.FloatTensor(tgt_seq) 
         
         num_indices=math.floor(window_size*(mask_percent))
 
-        indices=random.sample(range(window_size),num_indices)
+        indices=random.sample(range(window_size),num_indices) #error will be computed only at these positions
         
-        num_other=math.floor(num_indices*(.20))
+        num_other=math.floor(num_indices*(.20)) #these are the 10% random + 10% untouched
         indices_other=random.sample(indices,num_other)
         
-        indices_mask=[item for item in indices if item not in indices_other]
+        indices_mask=[item for item in indices if item not in indices_other] #these are the indices that are masked 
 
         indices_untouch=random.sample(indices_other,math.floor(num_other/2))
         indices_rand=[item for item in indices_other if item not in indices_untouch]
@@ -92,8 +93,9 @@ def get_data(data):
     val_data=data[ratio:,]
 
     if electra:
-        train_data_pairs=create_electra_tuples(train_data,seq_length)
-        val_data_pairs=create_electra_tuples(train_data,seq_length)
+        #the data tuples are the exactly the same as in bert
+        train_data_pairs=create_bert_tuples(train_data,seq_length, .15)
+        val_data_pairs=create_bert_tuples(train_data,seq_length, .15)
     elif full_transformer:
         train_data_pairs=create_data_triples(train_data, seq_length, prediction_size)
         val_data_pairs=create_data_triples(val_data, seq_length, prediction_size)
@@ -351,24 +353,42 @@ def train_electra(train_data, generator, discriminator):
         #if i%1000==0:
         #    print(f"prediction={prediction}")
 
+        dis_src=tgt
+        for index in mask_indices:
+            dis_src[index]=prediction[index]
+
+        std=torch.std(tgt)
+        differences=torch.subtract(tgt,prediction)
+        absolute=torch.abs(differences)
+
+        dis_tgt=[0]*len(tgt)
+        for index in mask_indices:
+            dis_tgt[index]=1 if absolute[index]>std else 0
+
+        dis_tgt=torch.LongTensor(dis_tgt)
+
+        dis_out=discriminator(dis_src)
+        dis_loss=dis_criterion(dis_out,dis_tgt)
+
+        dis_optimizer.zero_grad()
+        dis_loss.backward()
+        dis_optimizer.step()   
+
         tgt=(tgt-mean)/seq_range     
 
-        #implement here tgt vs prediction - if big difference
-
-        dis_out=discriminator(prediction)
-        dis_loss=dis_criterion(dis_out,dis_tgt)      
+        #implement here tgt vs prediction - if big difference   
 
         prediction=prediction[error_indices,:]
         tgt=tgt[error_indices,:]
 
-        loss = criterion(prediction, tgt)
+        gen_loss = gen_criterion(prediction, tgt)
         if i % 100 ==0:
             #print(j)
             print(f"loss={loss}")
 
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        gen_optimizer.zero_grad()
+        gen_loss.backward()
+        gen_optimizer.step()
 
 def train(data, model, discriminator=None):
 
@@ -552,9 +572,17 @@ else:
     new_predictions=predictions[-90:]
     print(new_predictions.view(1,-1))
 
-criterion = torch.nn.MSELoss()
-learning_rate = 1e-8
-optimizer = torch.optim.SGD(mymodel.parameters(), lr=learning_rate)
+if electra:
+    optim_lr= 1e-8
+    dis_lr=1e-3
+    gen_criterion = torch.nn.MSELoss()
+    gen_optimizer = torch.optim.SGD(generator.parameters(), lr=optim_lr)
+    dis_criterion = torch.nn.CrossEntropyLoss()
+    dis_optimizer =torch.optim.Adam(discriminator.parameters(), lr=dis_lr) 
+else:
+    learning_rate = 1e-8
+    criterion = torch.nn.MSELoss()
+    optimizer = torch.optim.SGD(mymodel.parameters(), lr=learning_rate)
 
 print(f"electra={electra}")
 print(f"full_transformer={full_transformer}")
