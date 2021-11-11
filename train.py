@@ -538,9 +538,9 @@ pe_features=10
 #if myEncoderOnly then d_model=embedding_dim
 #if myEncoderOnlyWithEmbedding then d_model=512, emedding_dim=embedding_dim
 
-from_new=False
+from_new=True
 
-electra=True
+electra=False
 
 #can't both be true
 train_bert=True
