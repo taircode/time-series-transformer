@@ -8,8 +8,10 @@ class myDataLoader():
         dtype=torch.float
 
         #load our data
-        btc_daily = pd.read_csv("data/btc_daily_raw.csv")
-        open = btc_daily['Open']
+        #test file is stock prices
+        #edit this code for user to specify data type, e.g. Covid cases, temperature, prices, etc.
+        data = pd.read_csv("data/datafile.csv")
+        open = data['Entries']
 
         self.data_tensor = torch.tensor(open.values,dtype=dtype)
 
