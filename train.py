@@ -1,6 +1,8 @@
 
 import torch
 from torch import Tensor
+from torch.autograd import Variable
+
 import numpy as np
 from positional import myPositionalEncoding
 import model
@@ -10,8 +12,6 @@ import copy
 from predict_future import predict_future
 from predict_future import predict_future_transformer
 import random
-from torch.autograd import Variable
-
 import data
 
 def _generate_square_subsequent_mask(self, sz):
