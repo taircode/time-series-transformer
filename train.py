@@ -2,7 +2,6 @@
 import torch
 from torch import Tensor
 from torch.autograd import Variable
-
 import numpy as np
 from positional import myPositionalEncoding
 import model
