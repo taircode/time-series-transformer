@@ -547,7 +547,7 @@ if __name__=='__main__':
 
     #options for encoder-only
     #do we need this?
-    error_last_only=False
+    error_last_only=True
     if error_last_only:
         triangle_encoder_mask=False
     else:
