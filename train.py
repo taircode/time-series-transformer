@@ -546,7 +546,8 @@ if __name__=='__main__':
     embed_true=not args.no_embed
 
     #options for encoder-only
-    error_last_only=True
+    #do we need this?
+    error_last_only=False
     if error_last_only:
         triangle_encoder_mask=False
     else:
