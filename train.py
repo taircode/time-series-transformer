@@ -94,21 +94,22 @@ def get_data(data):
     train_data=data
     val_data=data[ratio:,]
 
-    if electra:
+    if args.model_type=='electra':
         #the data tuples are the exactly the same as in bert
         train_data_pairs=create_bert_tuples(train_data,seq_length, .15)
         val_data_pairs=create_bert_tuples(train_data,seq_length, .15)
-    elif full_transformer:
+    elif args.model_type=='transformer':
         train_data_pairs=create_data_triples(train_data, seq_length, prediction_size)
         val_data_pairs=create_data_triples(val_data, seq_length, prediction_size)
-    else: #encoder only
-        if train_bert: #BERT-masking
-            #hard-coding 15% masking right now
-            train_data_pairs=create_bert_tuples(train_data, seq_length, .15)
-            val_data_pairs = create_bert_tuples(train_data, seq_length, .15)
-        else: #generative, so not BERT-masking
-            train_data_pairs=create_srctgt_pairs(train_data, seq_length)
-            val_data_pairs=create_srctgt_pairs(val_data, seq_length)
+    
+    #encoder only
+    elif args.model_type=='bert': #BERT-masking
+        #hard-coding 15% masking right now
+        train_data_pairs=create_bert_tuples(train_data, seq_length, .15)
+        val_data_pairs = create_bert_tuples(train_data, seq_length, .15)
+    else: #generative, so not BERT-masking
+        train_data_pairs=create_srctgt_pairs(train_data, seq_length)
+        val_data_pairs=create_srctgt_pairs(val_data, seq_length)
     
     return train_data_pairs, val_data_pairs    
 
@@ -451,19 +452,18 @@ def train(data, model, discriminator=None):
     epochs=1000
 
     #min_loss=float('inf')
-    if electra:
+    if args.model_type=='electra':
         generator=model
         gen_loss, dis_loss=electra_val(val_data,generator,discriminator)
         min_loss=dis_loss
         print(f"gen_loss={gen_loss}")
         print(f"dis_loss={min_loss}")
-    elif full_transformer:
+    elif args.model_type=='transformer':
         min_loss=transformer_val(val_data, model)
+    elif args.model_type=='bert':
+        min_loss=bert_val(val_data, model)
     else:
-        if train_bert:
-            min_loss=bert_val(val_data, model)
-        else:
-            min_loss=val(val_data, model)
+        min_loss=val(val_data, model)
 
     print(f"initial model has loss={min_loss}")
 
@@ -473,40 +473,38 @@ def train(data, model, discriminator=None):
 
         print(f"epoch={epoch}")
         
-        if electra:
+        if args.model_type=='electra':
             train_electra(train_data,generator,discriminator)
-        elif full_transformer:
+        elif args.model_type=='transformer':
             train_full_transformer(train_data, model)
-        else:    
-            if train_bert:
-                train_bert_style(train_data, model)
-            else:
-                train_generative(train_data, model)
+        elif args.model_type=='bert':    
+            train_bert_style(train_data, model)
+        else:
+            train_generative(train_data, model)
         
 
         epoch_end_time=time.time()
 
         if (epoch-1) %1==0:
             model.eval()
-            if electra:
+            if args.model_type=='electra':
                 generator.eval()
                 discriminator.eval()
                 gen_loss, dis_loss = electra_val(val_data,generator, discriminator)
                 print(f"gen_loss={gen_loss}")
                 print(f"min_loss={dis_loss}")
                 val_loss=dis_loss
-            elif full_transformer:
+            elif args.model_type=='transformer':
                 val_loss=transformer_val(val_data, model)
+            elif args.model_type=='bert':
+                val_loss=bert_val(val_data, model)
             else:
-                if train_bert:
-                    val_loss=bert_val(val_data, model)
-                else:
-                    val_loss=val(val_data, model)
+                val_loss=val(val_data, model)
             
             print('-' * 90)
             print('| end of epoch {:3d} | time: {:5.2f}s | val loss {:5.5f}'.format(epoch, (epoch_end_time - epoch_start_time), val_loss))
             print('-' * 90)
-            if electra:
+            if args.model_type=='electra':
                 if dis_loss<min_loss:
                     print('-' * 89+"\n"+"updating best_model"+"\n"+'-' * 89)
                     min_loss=val_loss
@@ -521,7 +519,7 @@ def train(data, model, discriminator=None):
                     best_model=copy.deepcopy(model)
                     torch.save(best_model,path)
                 else:
-                    if full_transformer:
+                    if args.model_type=='transformer':
                         predictions=predict_future_transformer(model,data,seq_length,30,tgt_seq_length)
                     else:
                         predictions=predict_future(model, data, seq_length, 30, num_ts_out)
@@ -531,11 +529,11 @@ def train(data, model, discriminator=None):
 if __name__=='__main__':
 
     parser=argparse.ArgumentParser()
-    parser.add_argument("--model_type","-mt",choices=["bert","transformer","electra"],default='bert',help="select model type")
+    parser.add_argument("--model_type","-mt",choices=["bert","transformer","electra","encoder_only"],default='bert',help="select model type")
     parser.add_argument("--seq_length","-sl",default=90,help="select desired sequence length")
     parser.add_argument("--pe_features","-pe",default=10,help="select number of positional encoding features")
     parser.add_argument("--from_new","-fn",choices=[True,False],default=False,help="start training from scratch (will overwrite)")
-    args=parser.parse_args
+    args=parser.parse_args()
 
     #add num_ts_in, right now it's hardcoded to 1
     seq_length=args.seq_length
@@ -550,12 +548,6 @@ if __name__=='__main__':
 
     from_new=args.from_new
 
-    electra=False
-
-    #can't both be true
-    train_bert=True
-    full_transformer=False
-
     #options for encoder-only
     error_last_only=True
     if error_last_only:
@@ -568,16 +560,6 @@ if __name__=='__main__':
 
     dtype=torch.float
 
-    if full_transformer:
-        type="transformer"
-    elif train_bert:
-        type="bert"
-    else:
-        if error_last_only:
-            type="encoder_error_last"
-        else:
-            type="encoder_error_all"
-
     if embed_true:
         firstlayer="embed"
     else:
@@ -587,20 +569,25 @@ if __name__=='__main__':
     else:
         positional="add"
 
-    if electra:
-        generator_path="electra/generator.pth"
-        discriminator_path="electra/discriminator.pth"
-    else:   
-        path=type+"/"+firstlayer+"/"+positional+"/model.pth"
+    if args.model_type=='encoder_only':
+        if error_last_only:
+            path=args.model_type+"/error_last/"+firstlayer+"/"+positional+"/model.pth"
+        else:
+            path=args.model_type+"/error_all/"+firstlayer+"/"+positional+"/model.pth"
+    else:
+        path=args.model_type+"/"+firstlayer+"/"+positional+"/model.pth"
+
+    generator_path="electra/generator.pth"
+    discriminator_path="electra/discriminator.pth"
 
     tgt_seq_length=2
     prediction_size=tgt_seq_length
 
-    if from_new:
-        if electra:
+    if args.from_new:
+        if args.model_type=='electra':
             generator = model.myEncoder(d_model=8, num_ts_in=num_ts_in, num_ts_out=num_ts_out, seq_length=seq_length, pe_features=pe_features, embed_true=embed_true,peconcat_true=peconcat_true)
             discriminator = model.myDiscriminator(d_model=16, num_layers=4, seq_length=seq_length, num_ts_in=num_ts_out)
-        elif full_transformer:
+        elif args.model_type=='transformer':
             mymodel = model.myTransformer(d_model=8, 
             nhead=1, 
             input_layer_true=embed_true, 
@@ -614,7 +601,7 @@ if __name__=='__main__':
         else:
             mymodel = model.myEncoder(d_model=16, num_ts_in=num_ts_in, num_ts_out=num_ts_out, seq_length=seq_length, pe_features=pe_features, embed_true=embed_true,peconcat_true=peconcat_true)
     else:
-        if electra:
+        if args.model_type=='electra':
             generator=torch.load(generator_path)
             discriminator=torch.load(discriminator_path)
         else:
@@ -623,9 +610,9 @@ if __name__=='__main__':
     dataLoader=data.myDataLoader()
     data=dataLoader.get_data()
 
-    if electra:
+    if args.model_type=='electra':
         print("implement electra prediction")
-    elif full_transformer:
+    elif args.model_type=='transformer':
         predictions=predict_future_transformer(mymodel, data, seq_length, 90, tgt_seq_length)
         new_predictions=predictions[-90:]
         print(new_predictions.view(1,-1))
@@ -634,7 +621,7 @@ if __name__=='__main__':
         new_predictions=predictions[-90:]
         print(new_predictions.view(1,-1))
 
-    if electra:
+    if args.model_type=='electra':
         optim_lr= 1e-8
         dis_lr=1e-3
         gen_criterion = torch.nn.MSELoss()
@@ -646,12 +633,12 @@ if __name__=='__main__':
         criterion = torch.nn.MSELoss()
         optimizer = torch.optim.SGD(mymodel.parameters(), lr=learning_rate)
 
-    print(f"electra={electra}")
-    print(f"full_transformer={full_transformer}")
-    print(f"Bert={train_bert}")
+    print(f"args.model_type={args.model_type=='electra'}")
+    #print(f"full_transformer={full_transformer}")
+    #print(f"Bert={train_bert}")
     print(f"embed_true={embed_true}")
     print(f"peconcat_true={peconcat_true}")
-    if electra:
+    if args.model_type=='electra':
         train(data,generator,discriminator)
     else:
         train(data, mymodel)
@@ -659,15 +646,15 @@ if __name__=='__main__':
 
     print("training completed")
     #PUT IN ELECTRA CASES DOWN HERE
-    if electra:
+    if args.model_type=='electra':
         generator=torch.load(generator_path)
         discriminator=torch.load(discriminator_path)
     else:
         mymodel=torch.load(path)
 
-    if electra:
+    if args.model_type=='electra':
         print("implement electra prediction")
-    elif full_transformer:
+    elif args.model_type=='transformer':
         predictions=predict_future_transformer(mymodel, data, seq_length, 90, tgt_seq_length)
     else:
         predictions=predict_future(mymodel, data, seq_length, 90, num_ts_out)

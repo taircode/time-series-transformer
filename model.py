@@ -88,8 +88,8 @@ class myEncoder(nn.Module):
         self.init_weights()
 
         #does this have parameters?
-        print("position Tensor")
-        print(self.positionTensor.parameters())
+        #print("position Tensor")
+        #print(self.positionTensor.parameters())
 
     def init_weights(self):
         initrange = 0.5
