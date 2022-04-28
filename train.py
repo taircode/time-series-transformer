@@ -569,7 +569,7 @@ if __name__=='__main__':
     generator_path="electra/generator.pth"
     discriminator_path="electra/discriminator.pth"
 
-    tgt_seq_length=2
+    tgt_seq_length=2 #this is only used if training transformer
     prediction_size=tgt_seq_length
 
     #instantiate the model
