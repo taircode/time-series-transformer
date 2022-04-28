@@ -28,7 +28,7 @@ class myPositionalEncoding(nn.Module):
         #self.pe.require_grad = False
         self.register_buffer('pe',pe)
 
-    def forward(self, x, type):
+    def forward(self, x):
         if self.pe_type=='add':
             output=torch.add(x,self.pe)
             return output
