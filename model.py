@@ -224,7 +224,7 @@ class myTransformer(nn.Module):
 
 
 
-#Both models below are subsumed as special cases of the one above by providing the one above some bool inputs
+#Both models below are subsumed as special cases of myEncoder above by providing myEncoder some args
 
 #the first quick model with only encoder, no embedding
 class myEncoderOnly(nn.Module):

@@ -544,10 +544,6 @@ if __name__=='__main__':
     num_ts_out=1
     pe_features=args.pe_features
     embed_true=not args.no_embed
-    #positionTensor = myPositionalEncoding(pe_features=pe_features, seq_length=seq_length)
-
-    #if myEncoderOnly then d_model=embedding_dim
-    #if myEncoderOnlyWithEmbedding then d_model=512, emedding_dim=embedding_dim
 
     #options for encoder-only
     error_last_only=True
@@ -582,16 +578,7 @@ if __name__=='__main__':
             generator = model.myEncoder(d_model=8, num_ts_in=num_ts_in, num_ts_out=num_ts_out, seq_length=seq_length, pe_features=pe_features, embed_true=embed_true,pe_type=args.pe_type)
             discriminator = model.myDiscriminator(d_model=16, num_layers=4, seq_length=seq_length, num_ts_in=num_ts_out)
         elif args.model_type=='transformer':
-            mymodel = model.myTransformer(d_model=8, 
-            nhead=1, 
-            input_layer_true=embed_true,
-            pe_type=args.pe_type, 
-            num_ts=1, 
-            src_seq_length=seq_length, 
-            tgt_seq_length=tgt_seq_length,
-            num_encoder_layers=4,
-            num_decoder_layers=4,
-            pe_features=10) #pe_features only matters if peconcat_true=True
+            mymodel = model.myTransformer(d_model=8, nhead=1, input_layer_true=embed_true,pe_type=args.pe_type, num_ts=1, src_seq_length=seq_length, tgt_seq_length=tgt_seq_length,num_encoder_layers=4,num_decoder_layers=4,pe_features=10) #pe_features only matters if peconcat_true=True
         else:
             mymodel = model.myEncoder(d_model=16, num_ts_in=num_ts_in, num_ts_out=num_ts_out, seq_length=seq_length, pe_features=pe_features, embed_true=embed_true,pe_type=args.pe_type)
     else:
@@ -637,6 +624,8 @@ if __name__=='__main__':
 
 
     print("training completed")
+
+    #Now doing some predictions in inference mode
     #PUT IN ELECTRA CASES DOWN HERE
     if args.model_type=='electra':
         generator=torch.load(generator_path)
