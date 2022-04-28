@@ -79,7 +79,7 @@ class myEncoder(nn.Module):
         else:
             self.d_model=self.embedding_dim
 
-        self.positionTensor=positional.myPositionalEncoding(pe_features=self.pe_features,seq_length=seq_length)
+        self.positionTensor=positional.myPositionalEncoding(pe_features=self.pe_features,seq_length=seq_length,pe_type=pe_type)
 
         self.encoder_layer=nn.TransformerEncoderLayer(d_model=self.d_model,nhead=1,dropout=0)
         self.encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=num_layers)
