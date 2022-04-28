@@ -6,7 +6,7 @@ import math
 #Originally this was not subclassing nn.Module
 class myPositionalEncoding(nn.Module):
     def __init__(self, pe_features: int, seq_length: int, pe_type: str='add'):
-        #super().__init__() #need this if subclassing nn.Module
+        super().__init__()
 
         self.pe_type=pe_type
 
