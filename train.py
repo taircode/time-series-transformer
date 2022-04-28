@@ -544,7 +544,6 @@ if __name__=='__main__':
     num_ts_out=1
     pe_features=args.pe_features
     embed_true=not args.no_embed
-    peconcat_true=True
     #positionTensor = myPositionalEncoding(pe_features=pe_features, seq_length=seq_length)
 
     #if myEncoderOnly then d_model=embedding_dim
@@ -562,18 +561,14 @@ if __name__=='__main__':
         firstlayer="embed"
     else:
         firstlayer="noembed"
-    if peconcat_true:
-        positional="concat"
-    else:
-        positional="add"
 
     if args.model_type=='encoder_only':
         if error_last_only:
-            path=args.model_type+"/error_last/"+firstlayer+"/"+positional+"/model.pth"
+            path=args.model_type+"/error_last/"+firstlayer+"/"+args.pe_type+"/model.pth"
         else:
-            path=args.model_type+"/error_all/"+firstlayer+"/"+positional+"/model.pth"
+            path=args.model_type+"/error_all/"+firstlayer+"/"+args.pe_type+"/model.pth"
     else:
-        path=args.model_type+"/"+firstlayer+"/"+positional+"/model.pth"
+        path=args.model_type+"/"+firstlayer+"/"+args.pe_type+"/model.pth"
 
     generator_path="electra/generator.pth"
     discriminator_path="electra/discriminator.pth"
@@ -584,13 +579,13 @@ if __name__=='__main__':
     #instantiate the model
     if args.from_new:
         if args.model_type=='electra':
-            generator = model.myEncoder(d_model=8, num_ts_in=num_ts_in, num_ts_out=num_ts_out, seq_length=seq_length, pe_features=pe_features, embed_true=embed_true,peconcat_true=peconcat_true)
+            generator = model.myEncoder(d_model=8, num_ts_in=num_ts_in, num_ts_out=num_ts_out, seq_length=seq_length, pe_features=pe_features, embed_true=embed_true,pe_type=args.pe_type)
             discriminator = model.myDiscriminator(d_model=16, num_layers=4, seq_length=seq_length, num_ts_in=num_ts_out)
         elif args.model_type=='transformer':
             mymodel = model.myTransformer(d_model=8, 
             nhead=1, 
-            input_layer_true=embed_true, 
-            peconcat_true=peconcat_true, 
+            input_layer_true=embed_true,
+            pe_type=args.pe_type, 
             num_ts=1, 
             src_seq_length=seq_length, 
             tgt_seq_length=tgt_seq_length,
@@ -598,7 +593,7 @@ if __name__=='__main__':
             num_decoder_layers=4,
             pe_features=10) #pe_features only matters if peconcat_true=True
         else:
-            mymodel = model.myEncoder(d_model=16, num_ts_in=num_ts_in, num_ts_out=num_ts_out, seq_length=seq_length, pe_features=pe_features, embed_true=embed_true,peconcat_true=peconcat_true)
+            mymodel = model.myEncoder(d_model=16, num_ts_in=num_ts_in, num_ts_out=num_ts_out, seq_length=seq_length, pe_features=pe_features, embed_true=embed_true,pe_type=args.pe_type)
     else:
         if args.model_type=='electra':
             generator=torch.load(generator_path)
@@ -632,11 +627,9 @@ if __name__=='__main__':
         criterion = torch.nn.MSELoss()
         optimizer = torch.optim.SGD(mymodel.parameters(), lr=learning_rate)
 
-    print(f"args.model_type={args.model_type=='electra'}")
-    #print(f"full_transformer={full_transformer}")
-    #print(f"Bert={train_bert}")
+    print(f"args.model_type={args.model_type}")
     print(f"embed_true={embed_true}")
-    print(f"peconcat_true={peconcat_true}")
+    print(f"args.pe_type={args.pe_type,}")
     if args.model_type=='electra':
         train(data,generator,discriminator)
     else:

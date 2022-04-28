@@ -53,7 +53,7 @@ class myEncoder(nn.Module):
         num_layers: int=4, 
         nhead: int=1, 
         embed_true: bool=True, 
-        peconcat_true: bool=True, 
+        pe_type: str='add', 
         num_ts_in: int=1, 
         num_ts_out: int=1, 
         pe_features: int=10, 
@@ -62,7 +62,7 @@ class myEncoder(nn.Module):
         super().__init__()
 
         #self.num_ts_in=num_ts_in
-        self.peconcat_true=peconcat_true
+        self.peconcat_true=True if pe_type=='concat' else False
         self.embed_true=embed_true
         self.seq_length=seq_length
 
