@@ -3,9 +3,11 @@ from torch import Tensor
 import torch.nn as nn
 import math
 
+#does positional encoding need to subclass nn.Module? 
+#I guess this depends on whether it's being learned or not. Think more about this.
 class myPositionalEncoding():
     def __init__(self, pe_features: int, seq_length: int):
-        super().__init__()
+        #super().__init__() #need this if subclassing nn.Module
 
         batch_size=1
 

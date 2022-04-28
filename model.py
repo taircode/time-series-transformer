@@ -48,7 +48,17 @@ class myDiscriminator(nn.Module):
 
 #A model with only an encoder
 class myEncoder(nn.Module):
-    def __init__(self, d_model: int=512, num_layers: int=4, nhead: int=1, embed_true: bool=True, peconcat_true: bool=True, num_ts_in: int=1, num_ts_out: int=1, pe_features: int=10, seq_length: int=100):
+    def __init__(self, 
+        d_model: int=512, 
+        num_layers: int=4, 
+        nhead: int=1, 
+        embed_true: bool=True, 
+        peconcat_true: bool=True, 
+        num_ts_in: int=1, 
+        num_ts_out: int=1, 
+        pe_features: int=10, 
+        seq_length: int=100
+    ):
         super().__init__()
 
         #self.num_ts_in=num_ts_in
@@ -74,11 +84,12 @@ class myEncoder(nn.Module):
         self.encoder_layer=nn.TransformerEncoderLayer(d_model=self.d_model,nhead=1,dropout=0)
         self.encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=num_layers)
 
-        self.finalLayer= nn.Linear(self.d_model,num_ts_out)
+        self.finalLayer= nn.Linear(self.d_model,num_ts_out) #this functions as a simple "decoder"
         self.init_weights()
 
         #does this have parameters?
-        #print(self.positionTensor.parameters())
+        print("position Tensor")
+        print(self.positionTensor.parameters())
 
     def init_weights(self):
         initrange = 0.5
@@ -119,16 +130,16 @@ class myEncoder(nn.Module):
 #A model with an encoder and decoder
 class myTransformer(nn.Module):
         def __init__(self, 
-        d_model: int=512, 
-        nhead: int=1, 
-        input_layer_true: bool=True, 
-        peconcat_true: bool=False, 
-        num_ts: int=1, 
-        src_seq_length: int=100, 
-        tgt_seq_length: int=2,
-        num_encoder_layers: int=4,
-        num_decoder_layers: int=4,
-        pe_features: int=10
+            d_model: int=512, 
+            nhead: int=1, 
+            input_layer_true: bool=True, 
+            peconcat_true: bool=False, 
+            num_ts: int=1, 
+            src_seq_length: int=100, 
+            tgt_seq_length: int=2,
+            num_encoder_layers: int=4,
+            num_decoder_layers: int=4,
+            pe_features: int=10
         ):
             super().__init__()
 

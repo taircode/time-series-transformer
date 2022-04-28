@@ -13,6 +13,8 @@ from predict_future import predict_future_transformer
 import random
 import data
 
+import argparse
+
 def _generate_square_subsequent_mask(self, sz):
     mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
     mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
@@ -286,7 +288,7 @@ def train_full_transformer(train_data, model):
 
         out=(out-mean)/seq_range
 
-        #the get data method might produce data triples where the tgt or out falls of the end of the arithmetic sequence making them a smaller length
+        #the get data method might produce data triples where the tgt or out falls off the end of the arithmetic sequence making them a smaller length
         #being lazy here, probably better to make this fix in the get_data method(s)
         if prediction.size()==out.size():
             loss = criterion(prediction, out)
@@ -526,137 +528,148 @@ def train(data, model, discriminator=None):
                     new_predictions=predictions[-30:]
                     print(new_predictions.view(1,-1))
 
-#add num_ts_in, right now it's hardcoded to 1
-seq_length=90
-#maybe have it figure out num_ts from dataLoader
-num_ts_in=1
-num_ts_out=1
-pe_features=10
-#positionTensor = myPositionalEncoding(pe_features=pe_features, seq_length=seq_length)
+if __name__=='__main__':
 
-#if myEncoderOnly then d_model=embedding_dim
-#if myEncoderOnlyWithEmbedding then d_model=512, emedding_dim=embedding_dim
+    parser=argparse.ArgumentParser()
+    parser.add_argument("--model_type","-mt",choices=["bert","transformer","electra"],default='bert',help="select model type")
+    parser.add_argument("--seq_length","-sl",default=90,help="select desired sequence length")
+    parser.add_argument("--pe_features","-pe",default=10,help="select number of positional encoding features")
+    parser.add_argument("--from_new","-fn",choices=[True,False],default=False,help="start training from scratch (will overwrite)")
+    args=parser.parse_args
 
-from_new=True
+    #add num_ts_in, right now it's hardcoded to 1
+    seq_length=args.seq_length
+    #maybe have it figure out num_ts from dataLoader
+    num_ts_in=1
+    num_ts_out=1
+    pe_features=args.pe_features
+    #positionTensor = myPositionalEncoding(pe_features=pe_features, seq_length=seq_length)
 
-electra=False
+    #if myEncoderOnly then d_model=embedding_dim
+    #if myEncoderOnlyWithEmbedding then d_model=512, emedding_dim=embedding_dim
 
-#can't both be true
-train_bert=True
-full_transformer=False
+    from_new=args.from_new
 
-#options for encoder-only
-error_last_only=True
-if error_last_only:
-    triangle_encoder_mask=False
-else:
-    triangle_encoder_mask=True
+    electra=False
 
-embed_true=False
-peconcat_true=True
+    #can't both be true
+    train_bert=True
+    full_transformer=False
 
-dtype=torch.float
-
-if full_transformer:
-    type="transformer"
-elif train_bert:
-    type="bert"
-else:
+    #options for encoder-only
+    error_last_only=True
     if error_last_only:
-        type="encoder_error_last"
+        triangle_encoder_mask=False
     else:
-        type="encoder_error_all"
+        triangle_encoder_mask=True
 
-if embed_true:
-    firstlayer="embed"
-else:
-    firstlayer="noembed"
-if peconcat_true:
-    positional="concat"
-else:
-    positional="add"
+    embed_true=False
+    peconcat_true=True
 
-if electra:
-    generator_path="electra/generator.pth"
-    discriminator_path="electra/discriminator.pth"
-else:   
-    path=type+"/"+firstlayer+"/"+positional+"/model.pth"
+    dtype=torch.float
 
-tgt_seq_length=2
-prediction_size=tgt_seq_length
+    if full_transformer:
+        type="transformer"
+    elif train_bert:
+        type="bert"
+    else:
+        if error_last_only:
+            type="encoder_error_last"
+        else:
+            type="encoder_error_all"
 
-if from_new:
+    if embed_true:
+        firstlayer="embed"
+    else:
+        firstlayer="noembed"
+    if peconcat_true:
+        positional="concat"
+    else:
+        positional="add"
+
     if electra:
-        generator = model.myEncoder(d_model=8, num_ts_in=num_ts_in, num_ts_out=num_ts_out, seq_length=seq_length, pe_features=pe_features, embed_true=embed_true,peconcat_true=peconcat_true)
-        discriminator = model.myDiscriminator(d_model=16, num_layers=4, seq_length=seq_length, num_ts_in=num_ts_out)
-    elif full_transformer:
-        mymodel = model.myTransformer(d_model=8, 
-        nhead=1, 
-        input_layer_true=embed_true, 
-        peconcat_true=peconcat_true, 
-        num_ts=1, 
-        src_seq_length=seq_length, 
-        tgt_seq_length=tgt_seq_length,
-        num_encoder_layers=4,
-        num_decoder_layers=4,
-        pe_features=10) #pe_features only matters if peconcat_true=True
+        generator_path="electra/generator.pth"
+        discriminator_path="electra/discriminator.pth"
+    else:   
+        path=type+"/"+firstlayer+"/"+positional+"/model.pth"
+
+    tgt_seq_length=2
+    prediction_size=tgt_seq_length
+
+    if from_new:
+        if electra:
+            generator = model.myEncoder(d_model=8, num_ts_in=num_ts_in, num_ts_out=num_ts_out, seq_length=seq_length, pe_features=pe_features, embed_true=embed_true,peconcat_true=peconcat_true)
+            discriminator = model.myDiscriminator(d_model=16, num_layers=4, seq_length=seq_length, num_ts_in=num_ts_out)
+        elif full_transformer:
+            mymodel = model.myTransformer(d_model=8, 
+            nhead=1, 
+            input_layer_true=embed_true, 
+            peconcat_true=peconcat_true, 
+            num_ts=1, 
+            src_seq_length=seq_length, 
+            tgt_seq_length=tgt_seq_length,
+            num_encoder_layers=4,
+            num_decoder_layers=4,
+            pe_features=10) #pe_features only matters if peconcat_true=True
+        else:
+            mymodel = model.myEncoder(d_model=16, num_ts_in=num_ts_in, num_ts_out=num_ts_out, seq_length=seq_length, pe_features=pe_features, embed_true=embed_true,peconcat_true=peconcat_true)
     else:
-        mymodel = model.myEncoder(d_model=16, num_ts_in=num_ts_in, num_ts_out=num_ts_out, seq_length=seq_length, pe_features=pe_features, embed_true=embed_true,peconcat_true=peconcat_true)
-else:
+        if electra:
+            generator=torch.load(generator_path)
+            discriminator=torch.load(discriminator_path)
+        else:
+            mymodel=torch.load(path)
+
+    dataLoader=data.myDataLoader()
+    data=dataLoader.get_data()
+
+    if electra:
+        print("implement electra prediction")
+    elif full_transformer:
+        predictions=predict_future_transformer(mymodel, data, seq_length, 90, tgt_seq_length)
+        new_predictions=predictions[-90:]
+        print(new_predictions.view(1,-1))
+    else:
+        predictions=predict_future(mymodel, data, seq_length, 90, num_ts_out)
+        new_predictions=predictions[-90:]
+        print(new_predictions.view(1,-1))
+
+    if electra:
+        optim_lr= 1e-8
+        dis_lr=1e-3
+        gen_criterion = torch.nn.MSELoss()
+        gen_optimizer = torch.optim.SGD(generator.parameters(), lr=optim_lr)
+        dis_criterion = torch.nn.CrossEntropyLoss()
+        dis_optimizer =torch.optim.Adam(discriminator.parameters(), lr=dis_lr) 
+    else:
+        learning_rate = 1e-8
+        criterion = torch.nn.MSELoss()
+        optimizer = torch.optim.SGD(mymodel.parameters(), lr=learning_rate)
+
+    print(f"electra={electra}")
+    print(f"full_transformer={full_transformer}")
+    print(f"Bert={train_bert}")
+    print(f"embed_true={embed_true}")
+    print(f"peconcat_true={peconcat_true}")
+    if electra:
+        train(data,generator,discriminator)
+    else:
+        train(data, mymodel)
+
+
+    print("training completed")
+    #PUT IN ELECTRA CASES DOWN HERE
     if electra:
         generator=torch.load(generator_path)
         discriminator=torch.load(discriminator_path)
     else:
         mymodel=torch.load(path)
 
-dataLoader=data.myDataLoader()
-data=dataLoader.get_data()
-
-if electra:
-    print("implement electra prediction")
-elif full_transformer:
-    predictions=predict_future_transformer(mymodel, data, seq_length, 90, tgt_seq_length)
+    if electra:
+        print("implement electra prediction")
+    elif full_transformer:
+        predictions=predict_future_transformer(mymodel, data, seq_length, 90, tgt_seq_length)
+    else:
+        predictions=predict_future(mymodel, data, seq_length, 90, num_ts_out)
     new_predictions=predictions[-90:]
     print(new_predictions.view(1,-1))
-else:
-    predictions=predict_future(mymodel, data, seq_length, 90, num_ts_out)
-    new_predictions=predictions[-90:]
-    print(new_predictions.view(1,-1))
-
-if electra:
-    optim_lr= 1e-8
-    dis_lr=1e-3
-    gen_criterion = torch.nn.MSELoss()
-    gen_optimizer = torch.optim.SGD(generator.parameters(), lr=optim_lr)
-    dis_criterion = torch.nn.CrossEntropyLoss()
-    dis_optimizer =torch.optim.Adam(discriminator.parameters(), lr=dis_lr) 
-else:
-    learning_rate = 1e-8
-    criterion = torch.nn.MSELoss()
-    optimizer = torch.optim.SGD(mymodel.parameters(), lr=learning_rate)
-
-print(f"electra={electra}")
-print(f"full_transformer={full_transformer}")
-print(f"Bert={train_bert}")
-print(f"embed_true={embed_true}")
-print(f"peconcat_true={peconcat_true}")
-if electra:
-    train(data,generator,discriminator)
-else:
-    train(data, mymodel)
-
-#PUT IN ELECTRA CASES DOWN HERE
-if electra:
-    generator=torch.load(generator_path)
-    discriminator=torch.load(discriminator_path)
-else:
-    mymodel=torch.load(path)
-
-if electra:
-    print("implement electra prediction")
-elif full_transformer:
-    predictions=predict_future_transformer(mymodel, data, seq_length, 90, tgt_seq_length)
-else:
-    predictions=predict_future(mymodel, data, seq_length, 90, num_ts_out)
-new_predictions=predictions[-90:]
-print(new_predictions.view(1,-1))
