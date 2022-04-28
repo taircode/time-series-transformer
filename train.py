@@ -532,7 +532,9 @@ if __name__=='__main__':
     parser.add_argument("--model_type","-mt",choices=["bert","transformer","electra","encoder_only"],default='bert',help="select model type")
     parser.add_argument("--seq_length","-sl",default=90,help="select desired sequence length")
     parser.add_argument("--pe_features","-pe",default=10,help="select number of positional encoding features")
-    parser.add_argument("--from_new","-fn",choices=[True,False],default=False,help="start training from scratch (will overwrite)")
+    parser.add_argument('--from_new', "-fn",dest='from_new', default=False, action='store_true', help="start training from scratch if set (will overwrite); default load trained model")
+    parser.add_argument('--no_embed', "-em",dest='no_embed', default=True, action='store_false', help="don't have an initial embed layer of set; default have an embedding layer")
+    parser.add_argument('--pe_type',choices=['add','concat'], default='add', help="select how to handle positional encoding")
     args=parser.parse_args()
 
     #add num_ts_in, right now it's hardcoded to 1
@@ -541,12 +543,12 @@ if __name__=='__main__':
     num_ts_in=1
     num_ts_out=1
     pe_features=args.pe_features
+    embed_true=not args.no_embed
+    peconcat_true=True
     #positionTensor = myPositionalEncoding(pe_features=pe_features, seq_length=seq_length)
 
     #if myEncoderOnly then d_model=embedding_dim
     #if myEncoderOnlyWithEmbedding then d_model=512, emedding_dim=embedding_dim
-
-    from_new=args.from_new
 
     #options for encoder-only
     error_last_only=True
@@ -554,10 +556,6 @@ if __name__=='__main__':
         triangle_encoder_mask=False
     else:
         triangle_encoder_mask=True
-
-    embed_true=False
-    peconcat_true=True
-
     dtype=torch.float
 
     if embed_true:
@@ -583,6 +581,7 @@ if __name__=='__main__':
     tgt_seq_length=2
     prediction_size=tgt_seq_length
 
+    #instantiate the model
     if args.from_new:
         if args.model_type=='electra':
             generator = model.myEncoder(d_model=8, num_ts_in=num_ts_in, num_ts_out=num_ts_out, seq_length=seq_length, pe_features=pe_features, embed_true=embed_true,peconcat_true=peconcat_true)
