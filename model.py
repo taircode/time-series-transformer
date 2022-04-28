@@ -107,13 +107,13 @@ class myEncoder(nn.Module):
     #src input should be seq_length by num_ts
     def forward(self, src, mask: None):
         if self.peconcat_true:
-            src=self.positionTensor.concat(src)
+            src=self.positionTensor(src)
             if self.embed_true:
                 src=self.embedding(src)
         else:
             if self.embed_true:
                 src=self.embedding(src)
-            src=self.positionTensor.add(src)
+            src=self.positionTensor(src)
 
         #print(f"src.size()={src.size()}")
         #print(f"len(src)={len(src)}")
@@ -133,7 +133,7 @@ class myTransformer(nn.Module):
             d_model: int=512, 
             nhead: int=1, 
             input_layer_true: bool=True, 
-            peconcat_true: bool=False, 
+            pe_type: str='add', 
             num_ts: int=1, 
             src_seq_length: int=100, 
             tgt_seq_length: int=2,
@@ -144,7 +144,7 @@ class myTransformer(nn.Module):
             super().__init__()
 
             self.num_ts=num_ts
-            self.peconcat_true=peconcat_true
+            self.peconcat_true=True if pe_type=='concat' else False
             self.input_layer_true=input_layer_true
             self.src_seq_length=src_seq_length
             self.tgt_seq_length=tgt_seq_length
@@ -170,8 +170,8 @@ class myTransformer(nn.Module):
                 if not self.peconcat_true:
                     self.pe_features=self.d_model
 
-            self.srcPositionTensor=positional.myPositionalEncoding(pe_features=self.pe_features,seq_length=src_seq_length)
-            self.tgtPositionTensor=positional.myPositionalEncoding(pe_features=self.pe_features,seq_length=tgt_seq_length)
+            self.srcPositionTensor=positional.myPositionalEncoding(pe_features=self.pe_features,seq_length=src_seq_length,pe_type=pe_type)
+            self.tgtPositionTensor=positional.myPositionalEncoding(pe_features=self.pe_features,seq_length=tgt_seq_length,pe_type=pe_type)
 
             self.transformer=nn.Transformer(d_model=self.d_model,nhead=nhead,num_encoder_layers=num_encoder_layers,num_decoder_layers=num_decoder_layers)
             
@@ -199,8 +199,8 @@ class myTransformer(nn.Module):
         #src input should be (seq_length, batch_size, num_ts)
         def forward(self, src, tgt):
             if self.peconcat_true:
-                src=self.srcPositionTensor.concat(src)
-                tgt=self.tgtPositionTensor.concat(tgt)
+                src=self.srcPositionTensor(src)
+                tgt=self.tgtPositionTensor(tgt)
                 if self.input_layer_true:
                     src=self.src_input_layer(src)
                     tgt=self.tgt_input_layer(tgt)
@@ -208,8 +208,8 @@ class myTransformer(nn.Module):
                 if self.input_layer_true:
                     src=self.src_input_layer(src)
                     tgt=self.tgt_input_layer(tgt)
-                src=self.srcPositionTensor.add(src)
-                tgt=self.tgtPositionTensor.add(tgt)
+                src=self.srcPositionTensor(src)
+                tgt=self.tgtPositionTensor(tgt)
 
             #batch_size=1 for now
             src_with_batch=src.reshape(self.src_seq_length,1,self.d_model)
@@ -221,12 +221,12 @@ class myTransformer(nn.Module):
             return output
 
 
-
-
-
+####################################################################################
+####################################################################################
+####################################################################################
 #Both models below are subsumed as special cases of myEncoder above by providing myEncoder some args
 
-#the first quick model with only encoder, no embedding
+#the first quick model with only encoder, no embedding, no positional encoding
 class myEncoderOnly(nn.Module):
     def __init__(self, d_model, num_layers: int=4):
         super().__init__()
@@ -255,7 +255,7 @@ class myEncoderOnly(nn.Module):
         output = self.finalLayer(output)
         return output
 
-#the second quick model with only encoder, with embedding
+#the second quick model with only encoder, with embedding, no positional encoding
 class myEncoderOnlyWithEmbedding(nn.Module):
     def __init__(self, d_model, num_layers: int=4, embedding_dim: int=11):
         super().__init__()
